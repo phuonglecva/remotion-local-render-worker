@@ -1,9 +1,9 @@
 import React from 'react';
 import {Composition} from 'remotion';
-import {VideoComposition, VideoCompositionProps} from './VideoComposition';
+import {VideoComposition} from './VideoComposition';
 
 export const Root: React.FC = () => (
-  <Composition<VideoCompositionProps>
+  <Composition
     id="Main"
     component={VideoComposition}
     durationInFrames={900}
