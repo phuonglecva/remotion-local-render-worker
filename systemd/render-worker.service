@@ -1,0 +1,21 @@
+[Unit]
+Description=Remotion Local Render Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=renderworker
+Group=renderworker
+WorkingDirectory=/opt/remotion-local-render-worker
+EnvironmentFile=/opt/remotion-local-render-worker/.env
+ExecStart=/opt/remotion-local-render-worker/.venv/bin/render-worker run
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
