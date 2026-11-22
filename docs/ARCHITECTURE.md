@@ -14,6 +14,8 @@ Drive inbox -> claim folder -> SQLite QUEUED
 
 SQLite is authoritative for local job state. Drive folders show the operator-facing state. The worker processes jobs sequentially; Remotion concurrency controls frame rendering within a job, not concurrent jobs.
 
+A host-level fcntl lock prevents two local worker processes from polling and claiming the same mailbox at the same time. This is not a distributed lock; do not run multiple hosts against one mailbox.
+
 ## Render responsibilities
 
 - FFmpeg: source probing, trims, speed changes, aspect-ratio normalization, audio preservation, base.mp4 generation, final faststart remux, and full-file decode.
