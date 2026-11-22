@@ -133,7 +133,8 @@ class FFmpegEngine:
             )
             if has_source_audio and segment.keep_audio:
                 command = [
-                    self.ffmpeg_bin, "-y", "-ss", str(segment.start), "-i", str(source),
+                    self.ffmpeg_bin, "-y",
+                    "-ss", str(segment.start), "-t", f"{duration:.6f}", "-i", str(source),
                     "-t", f"{output_duration:.6f}",
                     "-vf", f"setpts=PTS/{segment.speed:.6f},{self._video_filter(output)}",
                     "-af", self._atempo(segment.speed),
@@ -149,7 +150,8 @@ class FFmpegEngine:
                     + "asetpts=PTS-STARTPTS[a]"
                 )
                 command = [
-                    self.ffmpeg_bin, "-y", "-ss", str(segment.start), "-i", str(source),
+                    self.ffmpeg_bin, "-y",
+                    "-ss", str(segment.start), "-t", f"{duration:.6f}", "-i", str(source),
                     "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
                     "-filter_complex", filter_complex, "-map", "[v]", "-map", "[a]",
                     "-t", f"{output_duration:.6f}",
