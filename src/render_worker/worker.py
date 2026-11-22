@@ -27,7 +27,11 @@ class RenderWorker:
         settings.validate_drive()
         settings.ensure_local_dirs()
         self.settings = settings
-        self.drive = DriveMailbox(settings.service_account_file)  # type: ignore[arg-type]
+        self.drive = DriveMailbox(
+            service_account_file=settings.service_account_file,
+            oauth_client_file=settings.oauth_client_file,
+            token_file=settings.token_file,
+        )
         self.store = JobStore(settings.database_path)
         self.ffmpeg = FFmpegEngine(settings.ffmpeg_bin, settings.ffprobe_bin)
         self.remotion = RemotionEngine(settings.remotion_dir, settings.node_bin)
