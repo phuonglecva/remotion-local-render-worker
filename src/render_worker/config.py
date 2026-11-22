@@ -22,7 +22,6 @@ class Settings:
     npm_bin: str
     poll_interval_seconds: int
     max_jobs_per_poll: int
-    render_concurrency: int
 
     @classmethod
     def from_env(cls, root_dir: Path | None = None) -> "Settings":
@@ -51,7 +50,6 @@ class Settings:
             npm_bin=os.getenv("NPM_BIN", "npm"),
             poll_interval_seconds=max(3, int(os.getenv("WORKER_POLL_INTERVAL_SECONDS", "15"))),
             max_jobs_per_poll=max(1, int(os.getenv("WORKER_MAX_JOBS_PER_POLL", "2"))),
-            render_concurrency=max(1, int(os.getenv("RENDER_CONCURRENCY", "2"))),
         )
 
     def validate_drive(self) -> None:
