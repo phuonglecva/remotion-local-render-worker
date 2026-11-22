@@ -9,9 +9,12 @@ The bootstrap script installs the Python package and Remotion npm dependencies. 
 cp .env.example .env
 nano .env
 source .venv/bin/activate
-render-worker doctor
+render-worker auth-drive
 render-worker setup-drive
+render-worker doctor
 ~~~
+
+Complete auth-drive once before enabling the systemd service. The OAuth token is refreshed automatically and saved locally.
 
 ## Run one polling cycle
 
@@ -47,7 +50,8 @@ Do not run a second worker against the same mailbox. This milestone uses a singl
 
 ## Troubleshooting
 
-- Drive permission error: confirm the mailbox root is shared with the service-account email as Editor.
+- OAuth error: verify the OAuth consent screen, test-user list, Desktop client JSON, and local port-forward on 8765.
+- Drive permission error: confirm the OAuth user owns or can edit the mailbox folder; for service accounts, confirm the folder is in a Shared Drive.
 - No jobs found: check that the job folder is directly inside inbox and contains job.json.
 - Remotion not installed: run cd remotion && npm install.
 - Font fallback: install Be Vietnam Pro or Noto Sans on Ubuntu and rerun the render.
