@@ -6,8 +6,13 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .env
-*.json.key
-service-account*.json
+credentials.json
+token.json
+google-token*.json
+oauth-client*.json
+oauth-desktop-client*.json
+client_secret*.json
+*service-account*.json
 var/
 logs/
 *.sqlite3
