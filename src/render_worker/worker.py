@@ -33,15 +33,16 @@ class RenderWorker:
         self.folders = self.drive.ensure_mailbox_folders(settings.drive_mailbox_root_id or "")
 
     def run_forever(self) -> None:
-        recovered = self.store.recover_interrupted()
-        if recovered:
-            logger.warning("Recovered %s interrupted job(s); they will be reprocessed.", recovered)
         logger.info("Worker started. Poll interval: %ss", self.settings.poll_interval_seconds)
         while True:
             self.run_once()
             time.sleep(self.settings.poll_interval_seconds)
 
     def run_once(self) -> int:
+        recovered = self.store.recover_interrupted()
+        if recovered:
+            logger.warning("Recovered %s interrupted job(s); they will be reprocessed.", recovered)
+
         processed = 0
         queued = self.store.list_by_state("QUEUED", self.settings.max_jobs_per_poll)
         for row in queued:
