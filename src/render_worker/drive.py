@@ -55,6 +55,7 @@ class DriveMailbox:
         oauth_client_file: Path, token_file: Path, allow_interactive: bool
     ) -> UserCredentials:
         credentials = None
+        refreshed = False
         if token_file.is_file():
             credentials = UserCredentials.from_authorized_user_file(
                 str(token_file), scopes=DRIVE_SCOPE
@@ -62,10 +63,12 @@ class DriveMailbox:
 
         if credentials and credentials.expired and credentials.refresh_token:
             credentials.refresh(Request())
+            refreshed = True
 
         if credentials and credentials.valid:
-            if credentials.expired:
+            if refreshed:
                 token_file.write_text(credentials.to_json(), encoding="utf-8")
+                os.chmod(token_file, 0o600)
             return credentials
 
         if not allow_interactive:
