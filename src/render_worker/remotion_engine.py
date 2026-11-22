@@ -63,7 +63,7 @@ class RemotionEngine:
         command = [
             "npx", "--no-install", "remotion", "render",
             "src/index.ts", "Main", str(output_path),
-            f"--props-file={props_path}",
+            f"--props={props_path}",
             "--codec=h264", "--pixel-format=yuv420p", "--audio-codec=aac",
             f"--crf={manifest.render.crf}",
             f"--concurrency={manifest.render.concurrency}",
