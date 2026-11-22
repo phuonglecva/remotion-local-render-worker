@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import subprocess
+import sys
+
+from .config import Settings
+from .drive import DriveMailbox
+from .remotion_engine import RemotionEngine
+from .worker import RenderWorker
+
+
+def _version(command: list[str]) -> str | None:
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        return result.stdout.strip().splitlines()[0] if result.returncode == 0 else None
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+
+def doctor(settings: Settings) -> dict[str, object]:
+    checks: dict[str, object] = {
+        "python": sys.version.split()[0],
+        "ffmpeg": _version([settings.ffmpeg_bin, "-version"]),
+        "ffprobe": _version([settings.ffprobe_bin, "-version"]),
+        "node": _version([settings.node_bin, "--version"]),
+        "npm": _version([settings.npm_bin, "--version"]),
+        "service_account_file": bool(
+            settings.service_account_file and settings.service_account_file.is_file()
+        ),
+        "drive_mailbox_root_id_configured": bool(settings.drive_mailbox_root_id),
+        "remotion": RemotionEngine(settings.remotion_dir, settings.node_bin).doctor(),
+    }
+    remotion = checks["remotion"]
+    checks["ready_for_render"] = bool(
+        checks["ffmpeg"]
+        and checks["ffprobe"]
+        and checks["node"]
+        and checks["npm"]
+        and isinstance(remotion, dict)
+        and remotion.get("remotion_binary")
+    )
+    checks["ready_for_drive"] = bool(
+        checks["service_account_file"] and checks["drive_mailbox_root_id_configured"]
+    )
+    return checks
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="render-worker")
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("doctor", help="Check local dependencies and configuration.")
+    sub.add_parser("setup-drive", help="Create the mailbox folders.")
+    run = sub.add_parser("run", help="Start the polling worker.")
+    run.add_argument("--once", action="store_true", help="Poll one batch, then exit.")
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    settings = Settings.from_env()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    try:
+        if args.command == "doctor":
+            result = doctor(settings)
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+            if not result["ready_for_render"]:
+                raise SystemExit(2)
+            return
+        if args.command == "setup-drive":
+            settings.validate_drive()
+            drive = DriveMailbox(settings.service_account_file)  # type: ignore[arg-type]
+            folders = drive.ensure_mailbox_folders(settings.drive_mailbox_root_id or "")
+            print(json.dumps(folders, indent=2))
+            return
+        if args.command == "run":
+            worker = RenderWorker(settings)
+            if args.once:
+                print(f"Processed jobs: {worker.run_once()}")
+            else:
+                worker.run_forever()
+    except KeyboardInterrupt:
+        print("Worker stopped.")
+    except Exception as exc:
+        logging.exception("Command failed")
+        raise SystemExit(str(exc)) from exc
+
+
+if __name__ == "__main__":
+    main()
