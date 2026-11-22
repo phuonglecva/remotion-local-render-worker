@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 class Settings:
     root_dir: Path
     service_account_file: Path | None
+    oauth_client_file: Path | None
+    token_file: Path
     drive_mailbox_root_id: str | None
     database_path: Path
     work_dir: Path
@@ -33,12 +35,15 @@ class Settings:
             return value if value.is_absolute() else (root / value).resolve()
 
         service_account = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "").strip()
+        oauth_client = os.getenv("GOOGLE_OAUTH_CLIENT_FILE", "").strip()
         mailbox_id = os.getenv("DRIVE_MAILBOX_ROOT_ID", "").strip()
         return cls(
             root_dir=root,
             service_account_file=Path(service_account).expanduser().resolve()
             if service_account
             else None,
+            oauth_client_file=Path(oauth_client).expanduser().resolve() if oauth_client else None,
+            token_file=path_value("GOOGLE_TOKEN_FILE", "var/google-token.json"),
             drive_mailbox_root_id=mailbox_id or None,
             database_path=path_value("WORKER_DATABASE", "var/worker.sqlite3"),
             work_dir=path_value("WORKER_WORK_DIR", "var/work"),
@@ -54,10 +59,14 @@ class Settings:
 
     def validate_drive(self) -> None:
         missing = []
-        if not self.service_account_file:
-            missing.append("GOOGLE_SERVICE_ACCOUNT_FILE")
-        elif not self.service_account_file.is_file():
-            missing.append(f"service-account file not found: {self.service_account_file}")
+        if self.service_account_file:
+            if not self.service_account_file.is_file():
+                missing.append(f"service-account file not found: {self.service_account_file}")
+        elif self.oauth_client_file:
+            if not self.oauth_client_file.is_file():
+                missing.append(f"OAuth client file not found: {self.oauth_client_file}")
+        else:
+            missing.append("configure GOOGLE_OAUTH_CLIENT_FILE or GOOGLE_SERVICE_ACCOUNT_FILE")
         if not self.drive_mailbox_root_id:
             missing.append("DRIVE_MAILBOX_ROOT_ID")
         if missing:
