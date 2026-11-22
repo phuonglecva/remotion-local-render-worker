@@ -5,9 +5,9 @@
 A personal My Drive is owned by a human Google account. Use OAuth so uploaded output files remain owned by that account and count against its Drive storage quota.
 
 1. In Google Cloud Console, create or select a project and enable the Google Drive API.
-2. Configure the OAuth consent screen. If the app is in Testing mode, add the Google account that will authorize the worker as a test user.
-3. Create an OAuth Client ID with application type Desktop app.
-4. Download the client JSON to the Ubuntu machine, outside the repository.
+2. If this worker will access only your own Google account, use Google's Personal mode onboarding flow for the OAuth app. Personal mode is bound to the account that created it and avoids the 7-day test-user token expiry.
+3. Create an OAuth Client ID with application type Desktop app and download the client JSON to the Ubuntu machine, outside the repository.
+4. If Personal mode is not available and you configure an External app in Testing mode, add your account as a test user. Be aware that Google expires authorizations and offline refresh tokens after seven days in Testing mode. For a long-running worker, use Personal mode or publish the app to Production and complete any verification Google requires for the Drive scope.
 5. In .env, set:
 
 ~~~env
