@@ -5,6 +5,7 @@ import json
 import logging
 import subprocess
 import sys
+from logging.handlers import RotatingFileHandler
 
 from .config import Settings
 from .drive import DriveMailbox
@@ -61,9 +62,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
     settings = Settings.from_env()
+    settings.ensure_local_dirs()
+    file_handler = RotatingFileHandler(
+        settings.log_dir / "worker.log",
+        maxBytes=10 * 1024 * 1024,
+        backupCount=5,
+        encoding="utf-8",
+    )
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        handlers=[logging.StreamHandler(), file_handler],
+        force=True,
     )
     try:
         if args.command == "doctor":
