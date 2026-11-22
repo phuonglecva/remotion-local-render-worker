@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
 
-from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials as UserCredentials
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload, MediaIoBaseDownload
 
@@ -23,11 +27,71 @@ def _safe_name(name: str) -> str:
 
 
 class DriveMailbox:
-    def __init__(self, service_account_file: Path):
-        credentials = Credentials.from_service_account_file(
-            str(service_account_file), scopes=DRIVE_SCOPE
-        )
+    def __init__(
+        self,
+        service_account_file: Path | None = None,
+        oauth_client_file: Path | None = None,
+        token_file: Path | None = None,
+        allow_interactive: bool = False,
+    ):
+        if service_account_file:
+            credentials = ServiceAccountCredentials.from_service_account_file(
+                str(service_account_file), scopes=DRIVE_SCOPE
+            )
+            self.auth_method = "service_account"
+        elif oauth_client_file:
+            if not token_file:
+                raise ValueError("GOOGLE_TOKEN_FILE must be configured for OAuth.")
+            credentials = self._oauth_credentials(
+                oauth_client_file, token_file, allow_interactive
+            )
+            self.auth_method = "oauth"
+        else:
+            raise ValueError("Configure OAuth client credentials or a Shared Drive service account.")
         self.service = build("drive", "v3", credentials=credentials, cache_discovery=False)
+
+    @staticmethod
+    def _oauth_credentials(
+        oauth_client_file: Path, token_file: Path, allow_interactive: bool
+    ) -> UserCredentials:
+        credentials = None
+        if token_file.is_file():
+            credentials = UserCredentials.from_authorized_user_file(
+                str(token_file), scopes=DRIVE_SCOPE
+            )
+
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+
+        if credentials and credentials.valid:
+            if credentials.expired:
+                token_file.write_text(credentials.to_json(), encoding="utf-8")
+            return credentials
+
+        if not allow_interactive:
+            raise RuntimeError(
+                "No valid Google Drive OAuth token. Run 'render-worker auth-drive' once "
+                "before starting the worker."
+            )
+
+        flow = InstalledAppFlow.from_client_secrets_file(
+            str(oauth_client_file), scopes=DRIVE_SCOPE
+        )
+        print(
+            "Authorize Google Drive in a browser. For a remote Ubuntu host, open an SSH tunnel "
+            "with: ssh -L 8765:127.0.0.1:8765 USER@HOST"
+        )
+        credentials = flow.run_local_server(
+            host="127.0.0.1",
+            port=8765,
+            open_browser=False,
+            access_type="offline",
+            prompt="consent",
+        )
+        token_file.parent.mkdir(parents=True, exist_ok=True)
+        token_file.write_text(credentials.to_json(), encoding="utf-8")
+        os.chmod(token_file, 0o600)
+        return credentials
 
     def list_children(self, parent_id: str) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
@@ -51,9 +115,13 @@ class DriveMailbox:
             if not page_token:
                 return results
 
-    def find_child(self, parent_id: str, name: str, mime_type: str | None = None) -> dict[str, Any] | None:
+    def find_child(
+        self, parent_id: str, name: str, mime_type: str | None = None
+    ) -> dict[str, Any] | None:
         for item in self.list_children(parent_id):
-            if item.get("name") == name and (mime_type is None or item.get("mimeType") == mime_type):
+            if item.get("name") == name and (
+                mime_type is None or item.get("mimeType") == mime_type
+            ):
                 return item
         return None
 
@@ -73,6 +141,17 @@ class DriveMailbox:
         return created["id"]
 
     def ensure_mailbox_folders(self, root_id: str) -> dict[str, str]:
+        if self.auth_method == "service_account":
+            root = (
+                self.service.files()
+                .get(fileId=root_id, fields="id,driveId", supportsAllDrives=True)
+                .execute()
+            )
+            if not root.get("driveId"):
+                raise ValueError(
+                    "Service accounts cannot own files in personal My Drive. "
+                    "Use OAuth for My Drive, or place this mailbox in a Google Shared Drive."
+                )
         return {
             name: self.ensure_folder(root_id, name)
             for name in ("inbox", "processing", "completed", "failed", "outputs")
