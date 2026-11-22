@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
@@ -62,8 +63,11 @@ class DriveMailbox:
             )
 
         if credentials and credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
-            refreshed = True
+            try:
+                credentials.refresh(Request())
+                refreshed = True
+            except RefreshError:
+                credentials = None
 
         if credentials and credentials.valid:
             if refreshed:
