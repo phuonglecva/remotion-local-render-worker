@@ -27,7 +27,11 @@ The command handles at most WORKER_MAX_JOBS_PER_POLL jobs and exits. Use this fi
 render-worker run
 ~~~
 
-Default polling interval is 15 seconds. Set WORKER_POLL_INTERVAL_SECONDS to change it. The worker runs one job at a time.
+Default polling interval is 15 seconds. Set WORKER_POLL_INTERVAL_SECONDS to change it. The worker runs one job at a time and holds a host-level lock to prevent a second local process from competing for the mailbox.
+
+## Logs
+
+Logs are written to both stdout and var/logs/worker.log. The local log rotates at 10 MB and keeps five backups. Under systemd, follow the journal with journalctl as well.
 
 ## systemd
 
@@ -39,7 +43,7 @@ sudo systemctl enable --now render-worker
 sudo journalctl -u render-worker -f
 ~~~
 
-Do not run a second worker against the same mailbox. This milestone uses a single-worker claim model, not a distributed lease.
+Do not run a second worker against the same mailbox. This milestone uses a single-host lock, not a distributed lease.
 
 ## Troubleshooting
 
@@ -47,7 +51,7 @@ Do not run a second worker against the same mailbox. This milestone uses a singl
 - No jobs found: check that the job folder is directly inside inbox and contains job.json.
 - Remotion not installed: run cd remotion && npm install.
 - Font fallback: install Be Vietnam Pro or Noto Sans on Ubuntu and rerun the render.
-- Failed job: inspect worker logs, outputs/<job_id>/status-failed.json, and the input folder in failed.
+- Failed job: inspect var/logs/worker.log, outputs/<job_id>/status-failed.json, and the input folder in failed.
 - Interrupted job: restart the worker; active SQLite jobs are re-queued and downloaded again from processing.
 
 ## Output contract
