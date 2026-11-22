@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import shutil
 import time
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Iterator
 
 from pydantic import ValidationError
 
@@ -31,13 +33,33 @@ class RenderWorker:
         self.remotion = RemotionEngine(settings.remotion_dir, settings.node_bin)
         self.folders = self.drive.ensure_mailbox_folders(settings.drive_mailbox_root_id or "")
 
+    @contextmanager
+    def _worker_lock(self) -> Iterator[None]:
+        lock_path = self.settings.work_dir / ".worker.lock"
+        handle = lock_path.open("a+")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            handle.close()
+            raise RuntimeError("Another local worker process already holds the mailbox lock.") from exc
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            handle.close()
+
     def run_forever(self) -> None:
         logger.info("Worker started. Poll interval: %ss", self.settings.poll_interval_seconds)
-        while True:
-            self.run_once()
-            time.sleep(self.settings.poll_interval_seconds)
+        with self._worker_lock():
+            while True:
+                self._run_once()
+                time.sleep(self.settings.poll_interval_seconds)
 
     def run_once(self) -> int:
+        with self._worker_lock():
+            return self._run_once()
+
+    def _run_once(self) -> int:
         recovered = self.store.recover_interrupted()
         if recovered:
             logger.warning("Recovered %s interrupted job(s); they will be reprocessed.", recovered)
