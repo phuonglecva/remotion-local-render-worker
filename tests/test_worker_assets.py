@@ -3,7 +3,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from render_worker.models import JobManifest, TimelineDocument
+from render_worker.models import AssetManifest, JobManifest, TimelineDocument
 from render_worker.remote_assets import DownloadedAsset
 from render_worker.worker import RenderWorker
 
