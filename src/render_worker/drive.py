@@ -174,7 +174,7 @@ class DriveMailbox:
         if not item:
             raise FileNotFoundError(f"Missing {name} in Drive job folder {parent_id}")
         content = self.download_bytes(item["id"])
-        return json.loads(content.decode("utf-8"))
+        return json.loads(content.decode("utf-8-sig"))
 
     def download_bytes(self, file_id: str) -> bytes:
         request = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)

@@ -12,7 +12,8 @@ from render_worker.models import OutputSettings
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
     reason="FFmpeg and FFprobe are required for the media integration test.",
 )
-def test_edl_speed_ramp_creates_valid_concatenated_base(tmp_path):
+@pytest.mark.parametrize("encoding", ["utf-8", "utf-8-sig"])
+def test_edl_speed_ramp_creates_valid_concatenated_base(tmp_path, encoding):
     source = tmp_path / "source.mp4"
     edl = tmp_path / "edl.json"
     output = tmp_path / "base.mp4"
@@ -38,7 +39,7 @@ def test_edl_speed_ramp_creates_valid_concatenated_base(tmp_path):
                 ],
             }
         ),
-        encoding="utf-8",
+        encoding=encoding,
     )
 
     engine = FFmpegEngine()

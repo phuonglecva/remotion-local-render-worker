@@ -54,7 +54,9 @@ The worker checks that a service-account mailbox root belongs to a Shared Drive 
 
 The worker creates inbox, processing, completed, failed, and outputs folders under the configured root.
 
-Create one folder under inbox. Add job.json and every file referenced by its input paths. A typical job package is shown in examples/jobs/example. The Cloud editor can create or upload these files using the connected Google Drive workflow.
+Prepare the job folder outside inbox. Upload every asset, edl.json, and timeline.json referenced by the manifest, then upload job.json last. Move the complete folder into inbox to submit it. A typical job package is shown in examples/jobs/example. The Cloud editor can create or upload these files using the connected Google Drive workflow.
+
+The worker leaves folders without job.json in inbox and checks them again on later polling cycles; they do not consume the per-poll job limit. Once job.json is present, it is treated as the submission signal, so all referenced files must already be uploaded. Invalid manifests are moved to failed. JSON files may be UTF-8 with or without a BOM.
 
 For each successful job, outputs/<job_id>/ contains output.mp4, qa.json, and status.json. The original input folder moves from processing to completed. Failed jobs move to failed, and a status-failed.json is written to the output folder when Drive remains reachable.
 

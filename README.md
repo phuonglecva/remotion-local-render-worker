@@ -23,7 +23,7 @@ The local machine makes outbound Google Drive API requests only. No inbound port
 - Optional EDL cuts and 0.5x–2.0x speed changes.
 - Remotion caption, comic bubble, zoom, and flash cues.
 - 1080x1920, 30 FPS defaults; output settings are job-configurable.
-- Local SQLite state, restart recovery, rotating logs, and systemd example.
+- Local SQLite state, restart recovery, rotating logs, and PM2 process management.
 
 The worker does not create a story, infer edits, transcribe dialogue, generate voice-over, search B-roll, or auto-publish to TikTok. Those decisions belong to the Cloud editor; this repository executes a validated render job.
 
@@ -45,12 +45,22 @@ render-worker auth-drive
 render-worker setup-drive
 render-worker doctor
 render-worker run --once
-render-worker run
 ~~~
 
 For a headless remote Ubuntu host, use the SSH port-forward command printed by auth-drive while authorizing in your desktop browser. The OAuth token is stored in var/google-token.json with owner-only permissions and is excluded from Git.
 
-See docs/DRIVE_SETUP.md and docs/OPERATIONS.md before running the worker as a service.
+Run continuously with PM2, using the same Ubuntu user that completed Drive authorization:
+
+~~~bash
+npm install -g pm2  # Only if PM2 is not already installed.
+pm2 start ecosystem.config.js
+pm2 save
+pm2 logs render-worker
+~~~
+
+If migrating from systemd, run `sudo systemctl disable --now render-worker` before starting PM2. To start PM2 after reboot, run `pm2 startup` and execute the sudo command it prints.
+
+See docs/DRIVE_SETUP.md and docs/OPERATIONS.md for setup, migration, and process management details.
 
 ## Drive mailbox layout
 

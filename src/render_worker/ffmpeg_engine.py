@@ -111,7 +111,7 @@ class FFmpegEngine:
         crf: int,
         preset: str,
     ) -> None:
-        edl = EDLDocument.model_validate_json(edl_path.read_text(encoding="utf-8"))
+        edl = EDLDocument.model_validate_json(edl_path.read_text(encoding="utf-8-sig"))
         source_duration = float(source_probe.get("format", {}).get("duration", 0))
         segment_dir = destination.parent / ".segments"
         segment_dir.mkdir(parents=True, exist_ok=True)

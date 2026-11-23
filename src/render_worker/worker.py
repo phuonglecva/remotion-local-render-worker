@@ -77,21 +77,26 @@ class RenderWorker:
         remaining = max(0, self.settings.max_jobs_per_poll - processed)
         if remaining:
             inbox = self.drive.list_inbox_folders(self.folders["inbox"])
-            for folder in inbox[:remaining]:
-                self._accept_and_process(folder)
-                processed += 1
+            for folder in inbox:
+                if self._accept_and_process(folder):
+                    processed += 1
+                if processed >= self.settings.max_jobs_per_poll:
+                    break
         return processed
 
-    def _accept_and_process(self, folder: dict[str, Any]) -> None:
+    def _accept_and_process(self, folder: dict[str, Any]) -> bool:
         folder_id = folder["id"]
         folder_name = folder.get("name", folder_id)
         try:
             raw_manifest = self.drive.read_json_child(folder_id, "job.json")
             manifest = JobManifest.model_validate(raw_manifest)
-        except (ValueError, ValidationError, FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
+            logger.info("Waiting for job.json in Drive job folder %s", folder_name)
+            return False
+        except (ValueError, ValidationError, json.JSONDecodeError):
             logger.exception("Rejecting malformed Drive job folder %s", folder_name)
             self.drive.move_folder(folder_id, self.folders["failed"])
-            return
+            return True
 
         existing = self.store.get_job(manifest.job_id)
         if existing:
@@ -101,11 +106,12 @@ class RenderWorker:
                 folder_name,
             )
             self.drive.move_folder(folder_id, self.folders["failed"])
-            return
+            return True
 
         self.drive.move_folder(folder_id, self.folders["processing"])
         self.store.create_job(manifest.job_id, folder_id, manifest.model_dump(mode="json"))
         self._process_job(manifest.job_id, folder_id)
+        return True
 
     def _process_job(self, job_id: str, drive_folder_id: str) -> None:
         workspace = self.settings.work_dir / job_id
@@ -117,7 +123,7 @@ class RenderWorker:
             self.drive.download_folder_recursive(drive_folder_id, workspace)
 
             manifest_path = workspace / "job.json"
-            manifest = JobManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+            manifest = JobManifest.model_validate_json(manifest_path.read_text(encoding="utf-8-sig"))
             if manifest.job_id != job_id:
                 raise ValueError("job.json job_id changed after the folder was claimed.")
 
@@ -154,7 +160,7 @@ class RenderWorker:
                 if not timeline_path.is_file():
                     raise FileNotFoundError(f"Timeline file not found: {manifest.input.timeline}")
                 timeline = TimelineDocument.model_validate_json(
-                    timeline_path.read_text(encoding="utf-8")
+                    timeline_path.read_text(encoding="utf-8-sig")
                 )
 
             self.store.transition(job_id, "RENDERING")
