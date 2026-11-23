@@ -14,7 +14,7 @@ from .config import Settings
 from .db import JobStore
 from .drive import DriveMailbox
 from .ffmpeg_engine import FFmpegEngine
-from .models import JobManifest, TimelineDocument
+from .models import JobManifest, TimelineDocument, read_json_text
 from .qa import validate_output
 from .remotion_engine import RemotionEngine
 
@@ -117,7 +117,7 @@ class RenderWorker:
             self.drive.download_folder_recursive(drive_folder_id, workspace)
 
             manifest_path = workspace / "job.json"
-            manifest = JobManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+            manifest = JobManifest.model_validate_json(read_json_text(manifest_path))
             if manifest.job_id != job_id:
                 raise ValueError("job.json job_id changed after the folder was claimed.")
 
@@ -154,7 +154,7 @@ class RenderWorker:
                 if not timeline_path.is_file():
                     raise FileNotFoundError(f"Timeline file not found: {manifest.input.timeline}")
                 timeline = TimelineDocument.model_validate_json(
-                    timeline_path.read_text(encoding="utf-8")
+                    read_json_text(timeline_path)
                 )
 
             self.store.transition(job_id, "RENDERING")
