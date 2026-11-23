@@ -130,6 +130,8 @@ def _sniff(prefix: bytes, content_type: str) -> tuple[str, str | None]:
     if prefix.startswith(b"ID3"):
         return "audio", ".mp3"
     if len(prefix) > 1 and prefix[0] == 0xFF and (prefix[1] & 0xE0) == 0xE0:
+        if (prefix[1] & 0xF6) == 0xF0:
+            return "audio", ".aac"
         return "audio", ".mp3"
     if len(prefix) >= 12 and prefix[4:8] == b"ftyp":
         return "container", MIME_EXTENSIONS.get(lowered)
@@ -316,7 +318,7 @@ class RemoteAssetDownloader:
                 size_bytes=size,
                 sha256=actual_sha256,
                 source_host=final_host,
-                resolved_url=f"{urlsplit(current_url).scheme}://{final_host}{urlsplit(current_url).path}",
+                resolved_url=f"{urlsplit(current_url).scheme}://{final_host}",
             )
         except requests.RequestException as exc:
             raise AssetDownloadError(f"HTTP download failed: {exc.__class__.__name__}.") from exc
