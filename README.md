@@ -2,7 +2,7 @@
 
 A local-first render worker for the Video Editor Engine. ChatGPT Cloud submits a job package to a Google Drive mailbox; an Ubuntu machine polls that mailbox, preprocesses footage with FFmpeg, downloads referenced public media assets, renders the composition with Remotion, runs media QA, and uploads the finished MP4 and reports to Drive.
 
-The local machine makes outbound Google Drive and HTTPS media requests only. No inbound port, public webhook, Railway service, SSH tunnel, or exposed local API is required.
+The local machine makes outbound Google Drive and HTTPS media requests only. No inbound service, public webhook, or Railway service is required. The initial OAuth authorization can use the local browser or a one-time SSH tunnel on a headless PC.
 
 ## Pipeline
 
