@@ -68,7 +68,10 @@ class RemotionEngine:
             if spec.kind not in ("music", "sfx") or spec.id not in asset_props:
                 continue
             start = min(spec.start, duration_seconds)
-            end = min(spec.end if spec.end is not None else duration_seconds, duration_seconds)
+            default_end = duration_seconds
+            if spec.kind == "sfx" and assets[spec.id].duration_seconds:
+                default_end = min(duration_seconds, start + assets[spec.id].duration_seconds)
+            end = min(spec.end if spec.end is not None else default_end, duration_seconds)
             if end <= start:
                 raise RemotionError(
                     f"Audio asset '{spec.id}' has no remaining duration in the output timeline."
