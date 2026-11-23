@@ -38,15 +38,23 @@ jobs:
       - name: Typecheck
         working-directory: remotion
         run: npm run typecheck
-      - name: Create synthetic source clip
+      - name: Create synthetic source and remote-asset fixtures
         run: |
-          mkdir -p remotion/public/jobs/ci-smoke
+          mkdir -p remotion/public/jobs/ci-smoke/assets
           ffmpeg -y \
             -f lavfi -i testsrc2=size=1080x1920:rate=30 \
             -f lavfi -i sine=frequency=440:sample_rate=48000 \
             -t 1 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \
             remotion/public/jobs/ci-smoke/base.mp4
-      - name: Render actual Remotion MP4
+          ffmpeg -y \
+            -f lavfi -i testsrc2=size=160x160:rate=10 \
+            -t 1 -vf "fps=10,scale=160:160:flags=lanczos" \
+            remotion/public/jobs/ci-smoke/assets/meme.gif
+          ffmpeg -y \
+            -f lavfi -i sine=frequency=880:sample_rate=48000 \
+            -t 0.5 -c:a pcm_s16le \
+            remotion/public/jobs/ci-smoke/assets/sfx.wav
+      - name: Render actual Remotion MP4 with GIF and audio overlay
         working-directory: remotion
         run: |
           cat > "$RUNNER_TEMP/props.json" <<'JSON'
@@ -64,11 +72,42 @@ jobs:
                   "type": "caption",
                   "start": 0.1,
                   "end": 0.9,
-                  "text": "RENDER SMOKE TEST",
+                  "text": "REMOTE ASSET RENDER TEST",
                   "position": "top"
+                },
+                {
+                  "id": "ci-meme",
+                  "type": "meme",
+                  "asset_id": "ci-meme",
+                  "start": 0.2,
+                  "end": 0.9,
+                  "x": 62,
+                  "y": 60,
+                  "width": 30,
+                  "height": 30,
+                  "fit": "contain"
                 }
               ]
-            }
+            },
+            "assets": {
+              "ci-meme": {
+                "src": "jobs/ci-smoke/assets/meme.gif",
+                "mediaType": "gif"
+              }
+            },
+            "audioTracks": [
+              {
+                "id": "ci-sfx",
+                "src": "jobs/ci-smoke/assets/sfx.wav",
+                "start": 0.1,
+                "end": 0.8,
+                "volume": 0.25,
+                "fadeIn": 0.03,
+                "fadeOut": 0.08,
+                "loop": false,
+                "duckingRanges": []
+              }
+            ]
           }
           JSON
           npx --no-install remotion render src/index.ts Main "$RUNNER_TEMP/remotion-smoke.mp4" \
