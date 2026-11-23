@@ -24,6 +24,9 @@ class Settings:
     npm_bin: str
     poll_interval_seconds: int
     max_jobs_per_poll: int
+    asset_download_timeout_seconds: int
+    asset_download_max_bytes: int
+    asset_download_allow_http: bool
 
     @classmethod
     def from_env(cls, root_dir: Path | None = None) -> "Settings":
@@ -55,6 +58,18 @@ class Settings:
             npm_bin=os.getenv("NPM_BIN", "npm"),
             poll_interval_seconds=max(3, int(os.getenv("WORKER_POLL_INTERVAL_SECONDS", "15"))),
             max_jobs_per_poll=max(1, int(os.getenv("WORKER_MAX_JOBS_PER_POLL", "2"))),
+            asset_download_timeout_seconds=max(
+                5, min(300, int(os.getenv("ASSET_DOWNLOAD_TIMEOUT_SECONDS", "30")))
+            ),
+            asset_download_max_bytes=max(
+                1024 * 1024,
+                min(
+                    1024 * 1024 * 1024,
+                    int(os.getenv("ASSET_DOWNLOAD_MAX_BYTES", str(512 * 1024 * 1024))),
+                ),
+            ),
+            asset_download_allow_http=os.getenv("ASSET_DOWNLOAD_ALLOW_HTTP", "false").lower()
+            in ("1", "true", "yes"),
         )
 
     def validate_drive(self) -> None:
