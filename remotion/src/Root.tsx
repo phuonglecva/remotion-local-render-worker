@@ -17,6 +17,8 @@ export const Root: React.FC = () => (
       width: 1080,
       height: 1920,
       timeline: {schema_version: '1.0', layers: []},
+      assets: {},
+      audioTracks: [],
     }}
     calculateMetadata={({props}) => ({
       durationInFrames: props.durationInFrames,
