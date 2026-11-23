@@ -5,7 +5,8 @@
   "input": {
     "source_video": "assets/source.mp4",
     "edl": "edl.json",
-    "timeline": "timeline.json"
+    "timeline": "timeline.json",
+    "asset_manifest": "asset_manifest.json"
   },
   "output": {
     "width": 1080,
