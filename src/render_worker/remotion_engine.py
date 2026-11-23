@@ -76,6 +76,10 @@ class RemotionEngine:
                 raise RemotionError(
                     f"Audio asset '{spec.id}' has no remaining duration in the output timeline."
                 )
+            if spec.fade_in + spec.fade_out > end - start + 1e-6:
+                raise RemotionError(
+                    f"Audio asset '{spec.id}' fade durations exceed its scheduled output duration."
+                )
             audio_tracks.append({
                 "id": spec.id,
                 "src": asset_props[spec.id]["src"],
