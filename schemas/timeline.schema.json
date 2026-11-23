@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Remotion Timeline",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "layers"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "start", "end"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {"enum": ["caption", "bubble", "zoom", "flash"]},
+          "start": {"type": "number", "minimum": 0},
+          "end": {"type": "number", "exclusiveMinimum": 0},
+          "text": {"type": ["string", "null"]},
+          "position": {"enum": ["top", "center", "bottom"]},
+          "scale": {"type": "number", "minimum": 1.0, "maximum": 1.3},
+          "style": {"type": "object"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        run: pytest -q
+
+  remotion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Remotion
+        working-directory: remotion
+        run: npm install
+      - name: Typecheck
+        working-directory: remotion
+        run: npm run typecheck
+      - name: Create synthetic source clip
+        run: |
+          mkdir -p remotion/public/jobs/ci-smoke
+          ffmpeg -y \
+            -f lavfi -i testsrc2=size=1080x1920:rate=30 \
+            -f lavfi -i sine=frequency=440:sample_rate=48000 \
+            -t 1 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest \
+            remotion/public/jobs/ci-smoke/base.mp4
+      - name: Render actual Remotion MP4
+        working-directory: remotion
+        run: |
+          cat > "$RUNNER_TEMP/props.json" <<'JSON'
+          {
+            "baseVideoPath": "jobs/ci-smoke/base.mp4",
+            "durationInFrames": 30,
+            "fps": 30,
+            "width": 1080,
+            "height": 1920,
+            "timeline": {
+              "schema_version": "1.0",
+              "layers": [
+                {
+                  "id": "ci-caption",
+                  "type": "caption",
+                  "start": 0.1,
+                  "end": 0.9,
+                  "text": "RENDER SMOKE TEST",
+                  "position": "top"
+                }
+              ]
+            }
+          }
+          JSON
+          npx --no-install remotion render src/index.ts Main "$RUNNER_TEMP/remotion-smoke.mp4" \
+            --props="$RUNNER_TEMP/props.json" \
+            --codec=h264 --pixel-format=yuv420p --audio-codec=aac \
+            --crf=28 --concurrency=2
+          ffprobe -v error -show_entries stream=codec_name,pix_fmt,width,height \
+            -show_entries format=duration -of json "$RUNNER_TEMP/remotion-smoke.mp4"
+          ffmpeg -v error -xerror -i "$RUNNER_TEMP/remotion-smoke.mp4" -f null -

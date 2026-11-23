@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "job_id": "example-twin-vlog-001",
+  "title": "Example vertical family vlog",
+  "input": {
+    "source_video": "assets/source.mp4",
+    "edl": "edl.json",
+    "timeline": "timeline.json"
+  },
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "video_codec": "h264",
+    "pixel_format": "yuv420p",
+    "audio_codec": "aac"
+  },
+  "render": {
+    "crf": 18,
+    "preset": "medium",
+    "concurrency": 2
+  }
+}
