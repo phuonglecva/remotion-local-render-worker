@@ -1,9 +1,19 @@
 from __future__ import annotations
 
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def decode_json_bytes(content: bytes) -> str:
+    """Decode JSON payloads with or without a UTF-8 BOM."""
+    return content.decode("utf-8-sig")
+
+
+def read_json_text(path: Path) -> str:
+    """Read JSON text files with or without a UTF-8 BOM."""
+    return path.read_text(encoding="utf-8-sig")
 
 
 def safe_relative_path(value: str) -> str:
