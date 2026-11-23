@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Remote Media Asset Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assets"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "assets": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "url"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "maxLength": 100},
+          "kind": {"enum": ["music", "sfx", "meme", "broll"]},
+          "url": {"type": "string", "format": "uri", "pattern": "^https?://"},
+          "sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"},
+          "required": {"type": "boolean", "default": true},
+          "max_bytes": {"type": "integer", "minimum": 1, "maximum": 536870912},
+          "start": {"type": "number", "minimum": 0, "default": 0},
+          "end": {"type": "number", "exclusiveMinimum": 0},
+          "volume": {"type": "number", "minimum": 0, "maximum": 2},
+          "fade_in": {"type": "number", "minimum": 0, "maximum": 30, "default": 0},
+          "fade_out": {"type": "number", "minimum": 0, "maximum": 30, "default": 0},
+          "loop": {"type": "boolean", "default": false},
+          "ducking_ranges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["start", "end"],
+              "properties": {
+                "start": {"type": "number", "minimum": 0},
+                "end": {"type": "number", "exclusiveMinimum": 0},
+                "volume": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.3}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

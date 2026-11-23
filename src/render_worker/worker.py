@@ -6,6 +6,7 @@ import logging
 import shutil
 import time
 from contextlib import contextmanager
+from dataclasses import replace
 from typing import Any, Iterator
 
 from pydantic import ValidationError
@@ -14,8 +15,9 @@ from .config import Settings
 from .db import JobStore
 from .drive import DriveMailbox
 from .ffmpeg_engine import FFmpegEngine
-from .models import JobManifest, TimelineDocument
+from .models import AssetManifest, JobManifest, TimelineDocument
 from .qa import validate_output
+from .remote_assets import AssetDownloadError, DownloadedAsset, RemoteAssetDownloader
 from .remotion_engine import RemotionEngine
 
 
@@ -35,6 +37,11 @@ class RenderWorker:
         self.store = JobStore(settings.database_path)
         self.ffmpeg = FFmpegEngine(settings.ffmpeg_bin, settings.ffprobe_bin)
         self.remotion = RemotionEngine(settings.remotion_dir, settings.node_bin)
+        self.asset_downloader = RemoteAssetDownloader(
+            timeout_seconds=settings.asset_download_timeout_seconds,
+            max_bytes=settings.asset_download_max_bytes,
+            allow_http=settings.asset_download_allow_http,
+        )
         self.folders = self.drive.ensure_mailbox_folders(settings.drive_mailbox_root_id or "")
 
     @contextmanager
@@ -113,6 +120,81 @@ class RenderWorker:
         self._process_job(manifest.job_id, folder_id)
         return True
 
+    def _download_remote_assets(
+        self, workspace: Any, manifest: JobManifest
+    ) -> tuple[AssetManifest, dict[str, DownloadedAsset], list[dict[str, object]]]:
+        asset_manifest = AssetManifest()
+        if not manifest.input.asset_manifest:
+            return asset_manifest, {}, []
+
+        manifest_path = workspace / manifest.input.asset_manifest
+        if not manifest_path.is_file():
+            raise FileNotFoundError(f"Asset manifest not found: {manifest.input.asset_manifest}")
+        asset_manifest = AssetManifest.model_validate_json(
+            manifest_path.read_text(encoding="utf-8-sig")
+        )
+        assets_dir = workspace / "remote_assets"
+        downloaded, report = self.asset_downloader.download_all(asset_manifest, assets_dir)
+
+        verified: dict[str, DownloadedAsset] = {}
+        specs = {asset.id: asset for asset in asset_manifest.assets}
+        for asset_id, asset in downloaded.items():
+            spec = specs[asset_id]
+            if asset.media_type in ("image", "gif"):
+                if spec.kind not in ("meme",):
+                    raise AssetDownloadError(
+                        f"Asset '{asset_id}' is an image but kind is '{spec.kind}'."
+                    )
+                verified[asset_id] = asset
+                continue
+
+            probe = self.ffmpeg.probe(asset.local_path)
+            streams = probe.get("streams", [])
+            has_video = any(stream.get("codec_type") == "video" for stream in streams)
+            has_audio = any(stream.get("codec_type") == "audio" for stream in streams)
+
+            if spec.kind in ("music", "sfx"):
+                if not has_audio or has_video:
+                    raise AssetDownloadError(
+                        f"Audio asset '{asset_id}' must contain an audio stream and no video stream."
+                    )
+                asset_duration = float(probe.get("format", {}).get("duration", 0) or 0) or None
+                verified[asset_id] = replace(
+                    asset, media_type="audio", duration_seconds=asset_duration
+                )
+            elif spec.kind == "broll":
+                if not has_video:
+                    raise AssetDownloadError(f"B-roll asset '{asset_id}' has no video stream.")
+                verified[asset_id] = replace(asset, media_type="video")
+            elif spec.kind == "meme":
+                if not has_video:
+                    raise AssetDownloadError(
+                        f"Meme asset '{asset_id}' must be an image, GIF, or video."
+                    )
+                verified[asset_id] = replace(
+                    asset,
+                    media_type="gif" if asset.local_path.suffix.lower() == ".gif" else "video",
+                )
+
+        return asset_manifest, verified, report
+
+    @staticmethod
+    def _validate_timeline_assets(
+        timeline: TimelineDocument, assets: dict[str, DownloadedAsset]
+    ) -> None:
+        for cue in timeline.layers:
+            if cue.type not in ("meme", "broll"):
+                continue
+            asset = assets.get(cue.asset_id or "")
+            if not asset:
+                raise ValueError(
+                    f"Timeline cue '{cue.id}' references missing or failed asset '{cue.asset_id}'."
+                )
+            if cue.type == "broll" and asset.media_type != "video":
+                raise ValueError(f"B-roll cue '{cue.id}' must reference a video asset.")
+            if cue.type == "meme" and asset.media_type not in ("image", "gif", "video"):
+                raise ValueError(f"Meme cue '{cue.id}' references unsupported media.")
+
     def _process_job(self, job_id: str, drive_folder_id: str) -> None:
         workspace = self.settings.work_dir / job_id
         try:
@@ -126,6 +208,10 @@ class RenderWorker:
             manifest = JobManifest.model_validate_json(manifest_path.read_text(encoding="utf-8-sig"))
             if manifest.job_id != job_id:
                 raise ValueError("job.json job_id changed after the folder was claimed.")
+
+            asset_manifest, downloaded_assets, asset_report = self._download_remote_assets(
+                workspace, manifest
+            )
 
             self.store.transition(job_id, "VALIDATING")
             input_name = manifest.input.source_video or manifest.input.base_video
@@ -162,6 +248,7 @@ class RenderWorker:
                 timeline = TimelineDocument.model_validate_json(
                     timeline_path.read_text(encoding="utf-8-sig")
                 )
+            self._validate_timeline_assets(timeline, downloaded_assets)
 
             self.store.transition(job_id, "RENDERING")
             remotion_output = workspace / "remotion-render.mp4"
@@ -172,24 +259,30 @@ class RenderWorker:
                 output_path=remotion_output,
                 manifest=manifest,
                 duration_seconds=base_duration,
+                assets=downloaded_assets,
+                asset_manifest=asset_manifest,
             )
 
             self.store.transition(job_id, "QA")
             final_output = workspace / "output.mp4"
             self.ffmpeg.remux_faststart(remotion_output, final_output)
             base_has_audio = self.ffmpeg.has_audio(base_probe)
+            has_remote_audio = any(
+                asset.kind in ("music", "sfx") for asset in downloaded_assets.values()
+            )
             report = validate_output(
                 final_output,
                 self.settings.ffmpeg_bin,
                 self.settings.ffprobe_bin,
                 manifest.output,
-                require_audio=source_has_audio and base_has_audio,
+                require_audio=(source_has_audio and base_has_audio) or has_remote_audio,
                 expected_duration=base_duration,
             )
             report["job_id"] = job_id
             report["title"] = manifest.title
             report["render_engine"] = "Remotion"
             report["preprocessor"] = "FFmpeg"
+            report["remote_assets"] = asset_report
             report_path = workspace / "qa.json"
             report_path.write_text(
                 json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -208,6 +301,7 @@ class RenderWorker:
                 "output_file_id": uploaded["id"],
                 "output_url": uploaded.get("webViewLink"),
                 "qa_passed": True,
+                "remote_assets_verified": len(downloaded_assets),
             }
             self.drive.upload_json(status, output_folder, "status.json")
             self.drive.move_folder(drive_folder_id, self.folders["completed"])

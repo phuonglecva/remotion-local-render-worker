@@ -7,6 +7,8 @@ import subprocess
 import sys
 from logging.handlers import RotatingFileHandler
 
+import requests
+
 from .config import Settings
 from .drive import DriveMailbox
 from .remotion_engine import RemotionEngine
@@ -48,6 +50,12 @@ def doctor(settings: Settings) -> dict[str, object]:
         "oauth_client_file": bool(settings.oauth_client_file and settings.oauth_client_file.is_file()),
         "drive_token_file": bool(settings.token_file.is_file()),
         "drive_mailbox_root_id_configured": bool(settings.drive_mailbox_root_id),
+        "remote_asset_downloader": {
+            "requests": requests.__version__,
+            "https_only": not settings.asset_download_allow_http,
+            "timeout_seconds": settings.asset_download_timeout_seconds,
+            "max_bytes": settings.asset_download_max_bytes,
+        },
         "remotion": RemotionEngine(settings.remotion_dir, settings.node_bin).doctor(),
     }
     remotion = checks["remotion"]
@@ -60,6 +68,7 @@ def doctor(settings: Settings) -> dict[str, object]:
         and remotion.get("remotion_binary")
     )
     checks["ready_for_drive"] = drive_ready
+    checks["ready_for_remote_assets"] = bool(requests.__version__)
     return checks
 
 

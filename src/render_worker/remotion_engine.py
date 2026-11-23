@@ -6,7 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .models import JobManifest, TimelineDocument
+from .models import AssetManifest, JobManifest, TimelineDocument
+from .remote_assets import DownloadedAsset
 
 
 class RemotionError(RuntimeError):
@@ -35,6 +36,8 @@ class RemotionEngine:
         output_path: Path,
         manifest: JobManifest,
         duration_seconds: float,
+        assets: dict[str, DownloadedAsset] | None = None,
+        asset_manifest: AssetManifest | None = None,
     ) -> Path:
         status = self.doctor()
         if not all(status.values()):
@@ -42,11 +45,54 @@ class RemotionEngine:
                 "Remotion dependencies are not installed. Run: cd remotion && npm install"
             )
 
+        assets = assets or {}
+        asset_manifest = asset_manifest or AssetManifest()
         fps = manifest.output.fps
         duration_frames = max(1, round(duration_seconds * fps))
         public_job_dir = self.remotion_dir / "public" / "jobs" / job_id
-        public_job_dir.mkdir(parents=True, exist_ok=True)
+        public_asset_dir = public_job_dir / "assets"
+        public_asset_dir.mkdir(parents=True, exist_ok=True)
         shutil.copy2(base_video, public_job_dir / "base.mp4")
+
+        asset_props: dict[str, dict[str, str]] = {}
+        for asset_id, asset in assets.items():
+            target = public_asset_dir / asset.local_path.name
+            shutil.copy2(asset.local_path, target)
+            asset_props[asset_id] = {
+                "src": f"jobs/{job_id}/assets/{target.name}",
+                "mediaType": asset.media_type,
+            }
+
+        audio_tracks: list[dict[str, Any]] = []
+        for spec in asset_manifest.assets:
+            if spec.kind not in ("music", "sfx") or spec.id not in asset_props:
+                continue
+            start = min(spec.start, duration_seconds)
+            default_end = duration_seconds
+            if spec.kind == "sfx" and assets[spec.id].duration_seconds:
+                default_end = min(duration_seconds, start + assets[spec.id].duration_seconds)
+            end = min(spec.end if spec.end is not None else default_end, duration_seconds)
+            if end <= start:
+                raise RemotionError(
+                    f"Audio asset '{spec.id}' has no remaining duration in the output timeline."
+                )
+            if spec.fade_in + spec.fade_out > end - start + 1e-6:
+                raise RemotionError(
+                    f"Audio asset '{spec.id}' fade durations exceed its scheduled output duration."
+                )
+            audio_tracks.append({
+                "id": spec.id,
+                "src": asset_props[spec.id]["src"],
+                "start": start,
+                "end": end,
+                "volume": spec.volume if spec.volume is not None else (
+                    0.16 if spec.kind == "music" else 0.72
+                ),
+                "fadeIn": spec.fade_in,
+                "fadeOut": spec.fade_out,
+                "loop": spec.loop,
+                "duckingRanges": [item.model_dump(mode="json") for item in spec.ducking_ranges],
+            })
 
         props = {
             "baseVideoPath": f"jobs/{job_id}/base.mp4",
@@ -55,6 +101,8 @@ class RemotionEngine:
             "width": manifest.output.width,
             "height": manifest.output.height,
             "timeline": timeline.model_dump(mode="json"),
+            "assets": asset_props,
+            "audioTracks": audio_tracks,
         }
         output_path.parent.mkdir(parents=True, exist_ok=True)
         props_path = output_path.parent / "remotion-props.json"

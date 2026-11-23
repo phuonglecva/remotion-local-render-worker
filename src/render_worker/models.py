@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -26,8 +27,9 @@ class JobInput(StrictModel):
     base_video: str | None = None
     edl: str | None = None
     timeline: str | None = None
+    asset_manifest: str | None = None
 
-    @field_validator("source_video", "base_video", "edl", "timeline")
+    @field_validator("source_video", "base_video", "edl", "timeline", "asset_manifest")
     @classmethod
     def validate_paths(cls, value: str | None) -> str | None:
         return safe_relative_path(value) if value is not None else None
@@ -83,14 +85,93 @@ class EDLDocument(StrictModel):
     segments: list[EDLClip] = Field(min_length=1)
 
 
+class DuckingRange(StrictModel):
+    start: float = Field(ge=0)
+    end: float = Field(gt=0)
+    volume: float = Field(default=0.3, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "DuckingRange":
+        if self.end <= self.start:
+            raise ValueError("Ducking range end must be greater than start.")
+        return self
+
+
+class RemoteAssetSpec(StrictModel):
+    id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+    kind: Literal["music", "sfx", "meme", "broll"]
+    url: str = Field(min_length=8, max_length=4096)
+    sha256: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
+    required: bool = True
+    max_bytes: int | None = Field(default=None, ge=1, le=536870912)
+    # Audio placement is in output-timeline seconds. Meme/B-roll placement belongs in timeline.json.
+    start: float = Field(default=0, ge=0)
+    end: float | None = Field(default=None, gt=0)
+    volume: float | None = Field(default=None, ge=0, le=2)
+    fade_in: float = Field(default=0, ge=0, le=30)
+    fade_out: float = Field(default=0, ge=0, le=30)
+    loop: bool = False
+    ducking_ranges: list[DuckingRange] = Field(default_factory=list)
+
+    @field_validator("url")
+    @classmethod
+    def validate_direct_url_shape(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if parsed.scheme.lower() not in ("https", "http") or not parsed.hostname:
+            raise ValueError("Asset URL must be an absolute HTTP(S) URL.")
+        if parsed.username or parsed.password:
+            raise ValueError("Credentials must not be embedded in asset URLs.")
+        if parsed.fragment:
+            raise ValueError("Asset URLs must not contain fragments.")
+        try:
+            _ = parsed.port
+        except ValueError as exc:
+            raise ValueError("Asset URL has an invalid port.") from exc
+        return value
+
+    @model_validator(mode="after")
+    def validate_asset_options(self) -> "RemoteAssetSpec":
+        if self.end is not None and self.end <= self.start:
+            raise ValueError("Asset end must be greater than start.")
+        if self.kind not in ("music", "sfx"):
+            if self.volume is not None or self.fade_in or self.fade_out or self.loop or self.ducking_ranges:
+                raise ValueError("Audio timing and mix settings are only valid for music/SFX assets.")
+        if self.kind != "music" and self.ducking_ranges:
+            raise ValueError("Ducking ranges are only valid for music assets.")
+        if self.kind == "sfx" and self.loop:
+            raise ValueError("SFX assets cannot loop.")
+        if self.end is not None and self.fade_in + self.fade_out > self.end - self.start:
+            raise ValueError("Audio fade durations cannot exceed the scheduled track duration.")
+        return self
+
+
+class AssetManifest(StrictModel):
+    schema_version: Literal["1.0"] = "1.0"
+    assets: list[RemoteAssetSpec] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_unique_ids(self) -> "AssetManifest":
+        ids = [asset.id for asset in self.assets]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Asset IDs must be unique within asset_manifest.json.")
+        return self
+
+
 class TimelineCue(StrictModel):
     id: str = Field(min_length=1, max_length=100)
-    type: Literal["caption", "bubble", "zoom", "flash"]
+    type: Literal["caption", "bubble", "zoom", "flash", "meme", "broll"]
     start: float = Field(ge=0)
     end: float = Field(gt=0)
     text: str | None = Field(default=None, max_length=500)
+    asset_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     position: Literal["top", "center", "bottom"] = "bottom"
     scale: float = Field(default=1.08, ge=1.0, le=1.3)
+    x: float | None = Field(default=None, ge=0, le=100)
+    y: float | None = Field(default=None, ge=0, le=100)
+    width: float | None = Field(default=None, gt=0, le=100)
+    height: float | None = Field(default=None, gt=0, le=100)
+    opacity: float = Field(default=1, ge=0, le=1)
+    fit: Literal["cover", "contain", "fill"] = "contain"
     style: dict[str, str | int | float | bool] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -99,6 +180,8 @@ class TimelineCue(StrictModel):
             raise ValueError("Timeline cue end must be greater than start.")
         if self.type in ("caption", "bubble") and not self.text:
             raise ValueError(f"{self.type} cue requires text.")
+        if self.type in ("meme", "broll") and not self.asset_id:
+            raise ValueError(f"{self.type} cue requires asset_id.")
         return self
 
 

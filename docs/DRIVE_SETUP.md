@@ -54,7 +54,7 @@ The worker checks that a service-account mailbox root belongs to a Shared Drive 
 
 The worker creates inbox, processing, completed, failed, and outputs folders under the configured root.
 
-Prepare the job folder outside inbox. Upload every asset, edl.json, and timeline.json referenced by the manifest, then upload job.json last. Move the complete folder into inbox to submit it. A typical job package is shown in examples/jobs/example. The Cloud editor can create or upload these files using the connected Google Drive workflow.
+Prepare the job folder outside inbox. Upload every local asset, edl.json, timeline.json, and asset_manifest.json referenced by the job. The asset manifest contains public direct media URLs; the local worker downloads music, SFX, memes/GIFs and B-roll from those URLs. Upload job.json last, then move the complete folder into inbox to submit it. See examples/jobs/example and docs/ASSET_URLS.md for the job contract and remote URL format.
 
 The worker leaves folders without job.json in inbox and checks them again on later polling cycles; they do not consume the per-poll job limit. Once job.json is present, it is treated as the submission signal, so all referenced files must already be uploaded. Invalid manifests are moved to failed. JSON files may be UTF-8 with or without a BOM.
 
@@ -63,6 +63,7 @@ For each successful job, outputs/<job_id>/ contains output.mp4, qa.json, and sta
 ## Security
 
 - Never commit OAuth client JSON, token JSON, or service-account JSON.
+- Never put media provider cookies, bearer tokens or account credentials in asset URLs or manifests.
 - Share only the mailbox folder or Shared Drive required by the worker.
 - Do not expose a local HTTP API. The OAuth callback is a one-time loopback authorization flow.
 - Remove the app's Drive access or revoke the OAuth grant when the worker is no longer needed.

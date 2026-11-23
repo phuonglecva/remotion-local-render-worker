@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "assets": [
+    {
+      "id": "music-bed",
+      "kind": "music",
+      "url": "https://replace-with-direct-cdn-url.example/music.mp3",
+      "start": 0,
+      "volume": 0.14,
+      "fade_in": 0.8,
+      "fade_out": 1.2,
+      "loop": true,
+      "ducking_ranges": [
+        {"start": 0.5, "end": 8.0, "volume": 0.25}
+      ]
+    },
+    {
+      "id": "hook-impact",
+      "kind": "sfx",
+      "url": "https://replace-with-direct-cdn-url.example/impact.wav",
+      "start": 0.35,
+      "volume": 0.62,
+      "fade_out": 0.12
+    },
+    {
+      "id": "reaction-gif",
+      "kind": "meme",
+      "url": "https://replace-with-direct-cdn-url.example/reaction.gif"
+    }
+  ]
+}
