@@ -143,7 +143,7 @@ The worker uses Python requests with streaming downloads, manual redirect valida
 
 1. Search for music/SFX/meme/B-roll that matches the beat.
 2. Prefer direct downloadable CDN/media URLs over preview pages.
-3. Do not include cookies, bearer tokens, account credentials, or signed URLs that expose private data in the manifest.
+3. Never include cookies, bearer-token headers or account credentials. A short-lived signed CDN URL may be used only when it is intentionally authorized for this worker and the Drive mailbox is private; its query string is not written to QA logs.
 4. If a URL requires authentication or is app-only, mark it as unavailable for local download and do not pretend it was fetched.
 5. Verify that the URL is intended for download and use. A successful HTTP download is not a license grant.
 6. Add the URL and metadata to asset_manifest.json; add asset_id cues to timeline.json.
