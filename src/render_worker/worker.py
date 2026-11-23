@@ -158,7 +158,10 @@ class RenderWorker:
                     raise AssetDownloadError(
                         f"Audio asset '{asset_id}' must contain an audio stream and no video stream."
                     )
-                verified[asset_id] = replace(asset, media_type="audio")
+                asset_duration = float(probe.get("format", {}).get("duration", 0) or 0) or None
+                verified[asset_id] = replace(
+                    asset, media_type="audio", duration_seconds=asset_duration
+                )
             elif spec.kind == "broll":
                 if not has_video:
                     raise AssetDownloadError(f"B-roll asset '{asset_id}' has no video stream.")
