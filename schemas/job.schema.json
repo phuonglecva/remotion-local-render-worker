@@ -15,7 +15,8 @@
         "source_video": {"type": "string"},
         "base_video": {"type": "string"},
         "edl": {"type": "string"},
-        "timeline": {"type": "string"}
+        "timeline": {"type": "string"},
+        "asset_manifest": {"type": "string", "description": "Path to asset_manifest.json containing direct HTTP(S) media URLs."}
       },
       "oneOf": [
         {"required": ["source_video"], "not": {"required": ["base_video"]}},
