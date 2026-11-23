@@ -97,7 +97,12 @@ def validate_download_url(url: str, allow_http: bool = False) -> str:
         raise AssetDownloadError("Asset downloads require HTTPS (HTTP is disabled by default).")
     if not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
         raise AssetDownloadError("Asset URL must have a public host and no credentials/fragments.")
-    if parsed.port not in (None, 80, 443):
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise AssetDownloadError("Asset URL has an invalid port.") from exc
+    expected_port = 443 if scheme == "https" else 80
+    if port not in (None, expected_port):
         raise AssetDownloadError("Asset URL uses a non-standard port, which is blocked.")
     host = parsed.hostname.rstrip(".").lower()
     if host in {"localhost", "metadata.google.internal"} or host.endswith(".local"):
@@ -127,15 +132,11 @@ def _sniff(prefix: bytes, content_type: str) -> tuple[str, str | None]:
     if len(prefix) > 1 and prefix[0] == 0xFF and (prefix[1] & 0xE0) == 0xE0:
         return "audio", ".mp3"
     if len(prefix) >= 12 and prefix[4:8] == b"ftyp":
-        return "container", None
+        return "container", MIME_EXTENSIONS.get(lowered)
     if prefix.startswith(b"\x1aE\xdf\xa3"):
-        return "container", ".webm"
+        return "container", MIME_EXTENSIONS.get(lowered) or ".webm"
     if lowered.startswith("audio/"):
         return "audio", MIME_EXTENSIONS.get(lowered)
-    if lowered.startswith("image/gif"):
-        return "gif", ".gif"
-    if lowered.startswith("image/"):
-        return "image", MIME_EXTENSIONS.get(lowered)
     if lowered.startswith("video/"):
         return "video", MIME_EXTENSIONS.get(lowered)
     return "unknown", None
