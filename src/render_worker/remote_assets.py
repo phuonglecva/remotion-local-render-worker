@@ -65,6 +65,7 @@ class DownloadedAsset:
     sha256: str
     source_host: str
     resolved_url: str
+    duration_seconds: float | None = None
 
 
 def _public_addresses(hostname: str) -> list[str]:
