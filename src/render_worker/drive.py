@@ -15,6 +15,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload, MediaInMemoryUpload, MediaIoBaseDownload
 
+from .models import decode_json_bytes
+
 
 DRIVE_SCOPE = ["https://www.googleapis.com/auth/drive"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
@@ -174,7 +176,7 @@ class DriveMailbox:
         if not item:
             raise FileNotFoundError(f"Missing {name} in Drive job folder {parent_id}")
         content = self.download_bytes(item["id"])
-        return json.loads(content.decode("utf-8"))
+        return json.loads(decode_json_bytes(content))
 
     def download_bytes(self, file_id: str) -> bytes:
         request = self.service.files().get_media(fileId=file_id, supportsAllDrives=True)
